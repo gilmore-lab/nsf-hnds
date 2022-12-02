@@ -1,0 +1,101 @@
+---
+title: "NSF HNDS Awards"
+author: "Rick Gilmore"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+## Purpose
+
+This document provides details about awards made under the U.S. National Science Foundation (NSF) [Human Networks and Data Science](https://beta.nsf.gov/funding/opportunities/human-networks-data-science-hnds) program.
+
+## Acquire award data
+
+Awards made under the program can be found [here](https://www.nsf.gov/awardsearch/advancedSearchResult?ProgEleCode=130Y%2C147Y&BooleanElement=Any&BooleanRef=Any&ActiveAwards=true#results).
+
+The API *should* permit a CSV formatted download of the awards data, but none of the following worked for me.
+I get a '500 Internal Server Error'.
+
+```{r, eval=FALSE}
+download.file("https://www.nsf.gov/awardsearch/ExportResultServlet?exportType=csv", destfile = "csv/hnds.csv")
+hdns <- read.csv("https://www.nsf.gov/awardsearch/ExportResultServlet?exportType=csv")
+hnds <- readr::read_csv("https://www.nsf.gov/awardsearch/ExportResultServlet?exportType=csv")
+```
+
+Rather than perseverate on making the download automatic, I'm just copying the downloaded file to the local directory and moving on.
+
+## Load
+
+```{r}
+hnds <- readr::read_csv("csv/Awards.csv", show_col_types = FALSE)
+```
+
+## Explore
+
+Examine fields.
+
+```{r}
+names(hnds)
+```
+
+## Clean
+
+```{r}
+hnds <- hnds %>%
+  dplyr::mutate(., AwardedToDate = stringr::str_remove(AwardedAmountToDate, "\\$|,")) %>%
+  dplyr::mutate(., AwardedToDate = stringr::str_remove_all(AwardedToDate, ",")) %>%
+  dplyr::mutate(., AwardedToDate = as.numeric(AwardedToDate))
+```
+
+## Histogram of award size
+
+```{r}
+hnds %>%
+  ggplot() +
+  aes(x = AwardedToDate) +
+  geom_histogram()
+```
+
+## Focus on infrastructure grants
+
+```{r, results='hide'}
+hnds$`Program(s)`
+```
+
+If the `Program(s)` field contains 'Human Networks & Data Sci Infr', the award is an infrastructure award.
+
+```{r}
+hnds <- hnds %>%
+  dplyr::mutate(., hnds_inf = stringr::str_detect(`Program(s)`, "Human Networks & Data Sci Infr"))
+```
+
+```{r}
+hnds %>%
+  dplyr::filter(., hnds_inf) %>%
+  dplyr::arrange(., desc(AwardedToDate)) %>%
+  dplyr::select(., Title, PrincipalInvestigator, Organization, AwardedAmountToDate) %>%
+  knitr::kable(format = 'html') %>%
+  kableExtra::kable_classic()
+```
+
+These are total award amounts, so to approximate the size of the direct costs, we divide by 1.6.
+
+```{r}
+hnds <- hnds %>%
+  dplyr::mutate(., est_direct_cost = AwardedToDate/1.6)
+```
+
+```{r}
+hnds %>%
+  dplyr::filter(., hnds_inf) %>%
+  dplyr::arrange(., desc(AwardedToDate)) %>%
+  dplyr::select(., Title, PrincipalInvestigator, Organization, AwardedAmountToDate, est_direct_cost) %>%
+  knitr::kable(format = 'html') %>%
+  kableExtra::kable_classic()
+```
+
